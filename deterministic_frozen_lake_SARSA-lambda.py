@@ -12,7 +12,7 @@ def next_action(Q, state, epsilon, n_actions):
         return np.argmax(Q[state])
 
 # Define the SARSA algorithm 
-def sarsa(env, num_episodes, epsilon, epsilon_min, epsilon_decay, alpha, gamma):
+def sarsa_lambda(env, num_episodes, epsilon, epsilon_min, epsilon_decay, alpha, gamma, lambda_):
     # First inizialize Q with zeros
     n_states = env.observation_space.n
     n_actions = env.action_space.n
@@ -23,6 +23,7 @@ def sarsa(env, num_episodes, epsilon, epsilon_min, epsilon_decay, alpha, gamma):
         # set state to inizial state
         state, _ = env.reset()
         done = False # The environment will tell me when I am done
+        elegibility = np.zeros((n_states, n_actions)) # OSS elegibility referes to a couple (state, action)
         # pick the first action before the episode starts
         action = next_action(Q, state, epsilon, n_actions)
         total_reward = 0 # for statistics
@@ -34,7 +35,10 @@ def sarsa(env, num_episodes, epsilon, epsilon_min, epsilon_decay, alpha, gamma):
             # choose next action from next_state before the update
             next_action_ = next_action(Q, next_state, epsilon, n_actions)
             # update Q
-            Q[state][action] = Q[state, action] + alpha*(reward + gamma*Q[next_state][next_action_] - Q[state][action])
+            delta = reward + gamma*Q[next_state][next_action_] - Q[state][action]
+            elegibility[state][action] += 1
+            Q[state][action] = Q[state, action] + alpha*delta*elegibility[state][action]
+            elegibility = gamma*lambda_*elegibility # decay all the elegibility
             state = next_state
             action = next_action_
 
@@ -46,6 +50,7 @@ def sarsa(env, num_episodes, epsilon, epsilon_min, epsilon_decay, alpha, gamma):
             print(f"Episode {episode+1}: Avg Reward {avg_reward:.2f}")
 
     return Q, reward_per_episode
+
 
 
 # Courtesy of chatgpt
@@ -88,7 +93,8 @@ def main():
     epsilon_decay = 0.999
     alpha = 0.1
     gamma = 0.90
-    Q, rewards_per_episode = sarsa(env, num_episodes, epsilon, epsilon_min, epsilon_decay, alpha, gamma)
+    lambda_ = 0.0
+    Q, rewards_per_episode = sarsa_lambda(env, num_episodes, epsilon, epsilon_min, epsilon_decay, alpha, gamma, lambda_)
     env.close()
     test_agent(Q)
     
@@ -143,4 +149,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
