@@ -11,41 +11,56 @@ def next_action(Q, state, epsilon, n_actions):
     else:
         return np.argmax(Q[state])
 
-# Define the SARSA algorithm 
 def sarsa(env, num_episodes, epsilon, epsilon_min, epsilon_decay, alpha, gamma):
-    # First inizialize Q with zeros
+    # First initialize Q with zeros
     n_states = env.observation_space.n
     n_actions = env.action_space.n
     Q = np.zeros((n_states, n_actions))
     reward_per_episode = []
 
+    # Enable interactive mode for live plotting
+    plt.ion()
+    demo_fig = plt.figure("Live Demo")
+
     for episode in range(num_episodes):
-        # set state to inizial state
         state, _ = env.reset()
-        done = False # The environment will tell me when I am done
-        # pick the first action before the episode starts
+        done = False
         action = next_action(Q, state, epsilon, n_actions)
-        total_reward = 0 # for statistics
+        total_reward = 0
 
         while not done:
-            # actuate my action
             next_state, reward, done, truncated, info = env.step(action)
             total_reward += reward
-            # choose next action from next_state before the update
             next_action_ = next_action(Q, next_state, epsilon, n_actions)
-            # update Q
-            Q[state][action] = Q[state, action] + alpha*(reward + gamma*Q[next_state][next_action_] - Q[state][action])
+            Q[state, action] += alpha * (reward + gamma * Q[next_state, next_action_] - Q[state, action])
             state = next_state
             action = next_action_
 
-        reward_per_episode.append(total_reward) # save the total reward for this episode
-        epsilon = max(epsilon_min, epsilon*epsilon_decay) # Update epsilon every episode
+        reward_per_episode.append(total_reward)
+        epsilon = max(epsilon_min, epsilon * epsilon_decay)
 
         if (episode + 1) % 500 == 0:
             avg_reward = np.mean(reward_per_episode[-500:])
             print(f"Episode {episode+1}: Avg Reward {avg_reward:.2f}")
 
+            # Run a full demonstration episode using the greedy policy (no exploration)
+            demo_state, _ = env.reset()
+            demo_done = False
+            while not demo_done:
+                frame = env.render()  # Get the current frame (assumes render_mode supports this)
+                plt.figure(demo_fig.number)
+                plt.clf()
+                plt.imshow(frame)
+                plt.title(f"Live Demo at Episode {episode+1}")
+                plt.draw()
+                plt.pause(.2)  # .2 second delay per action
+
+                demo_action = next_action(Q, state=demo_state, epsilon=epsilon, n_actions=n_actions)  # e-greedy action from current Q
+                demo_state, reward, demo_done, truncated, info = env.step(demo_action)
+    plt.close()
+    env.close()
     return Q, reward_per_episode
+
 
 
 # Courtesy of chatgpt
@@ -56,7 +71,7 @@ def test_agent(Q, episodes=1):
     for episode in range(episodes):
         state, info = env.reset()
         done = False
-        print(f"\nEpisode {episode+1}:")
+        print(f"\nFinal test {episode+1}:")
 
         while not done:
             action = np.argmax(Q[state])  # Always take the best action
@@ -65,8 +80,8 @@ def test_agent(Q, episodes=1):
             # Render the current frame
             frame = env.render()
             plt.imshow(frame)
-            plt.title(f"Episode {episode+1}")
-            plt.show(block=False)  # Show image without blocking execution
+            plt.title(f"Final test {episode+1}")
+            plt.show()  # Show image without blocking execution
             plt.pause(1.0)  # Pause for half a second to observe
 
             if done:
@@ -139,8 +154,7 @@ def main():
     plt.title("Learned Policy")
     plt.show()
 
-
-
+    input()
 if __name__ == "__main__":
     main()
 
