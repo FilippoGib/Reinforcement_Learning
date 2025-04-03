@@ -5,50 +5,58 @@ import numpy as np
 
 
 # Define the epsilon-greedy policy
-def next_action(Q, state, epsilon, n_actions):
+def epsilon_greedy_next_action(Q, state, epsilon, n_actions):
     if np.random.rand() < epsilon:
         return np.random.randint(n_actions)
     else:
         return np.argmax(Q[state])
-
-# Define the SARSA algorithm 
-def sarsa_lambda(env, num_episodes, epsilon, epsilon_min, epsilon_decay, alpha, gamma, lambda_):
-    # First inizialize Q with zeros
+    
+def Q_learn(env, num_episodes, epsilon, epsilon_min, epsilon_decay, alpha, gamma):
+    # First initialize Q with zeros
     n_states = env.observation_space.n
     n_actions = env.action_space.n
     Q = np.zeros((n_states, n_actions))
     reward_per_episode = []
 
+    # Enable interactive mode for live plotting
+    plt.ion()
+    demo_fig = plt.figure("Live Demo")
+
     for episode in range(num_episodes):
-        # set state to inizial state
         state, _ = env.reset()
-        done = False # The environment will tell me when I am done
-        elegibility = np.zeros((n_states, n_actions)) # OSS elegibility referes to a couple (state, action)
-        # pick the first action before the episode starts
-        action = next_action(Q, state, epsilon, n_actions)
-        total_reward = 0 # for statistics
+        done = False
+        total_reward = 0
 
         while not done:
-            # actuate my action
+            action = epsilon_greedy_next_action(Q, state, epsilon=epsilon, n_actions=n_actions) # pick next action with behaviour policy in a e-greedy way
             next_state, reward, done, truncated, info = env.step(action)
             total_reward += reward
-            # choose next action from next_state before the update
-            next_action_ = next_action(Q, next_state, epsilon, n_actions)
-            # update Q
-            delta = reward + gamma*Q[next_state][next_action_] - Q[state][action]
-            elegibility[state][action] += 1
-            Q[state][action] = Q[state, action] + alpha*delta*elegibility[state][action]
-            elegibility = gamma*lambda_*elegibility # decay all the elegibility
+            Q[state, action] += alpha * (reward + gamma * np.max(Q[next_state]) - Q[state, action])
             state = next_state
-            action = next_action_
-
-        reward_per_episode.append(total_reward) # save the total reward for this episode
-        epsilon = max(epsilon_min, epsilon*epsilon_decay) # Update epsilon every episode
+            
+        epsilon = max(epsilon_min, epsilon * epsilon_decay)
+        reward_per_episode.append(total_reward)
 
         if (episode + 1) % 500 == 0:
             avg_reward = np.mean(reward_per_episode[-500:])
             print(f"Episode {episode+1}: Avg Reward {avg_reward:.2f}")
 
+            # Run a full demonstration episode using the greedy policy (no exploration)
+            demo_state, _ = env.reset()
+            demo_done = False
+            while not demo_done:
+                frame = env.render()  # Get the current frame (assumes render_mode supports this)
+                plt.figure(demo_fig.number)
+                plt.clf()
+                plt.imshow(frame)
+                plt.title(f"Live Demo at Episode {episode+1}")
+                plt.draw()
+                plt.pause(.2)  # .2 second delay per action
+
+                demo_action = epsilon_greedy_next_action(Q, state=demo_state, epsilon=epsilon, n_actions=n_actions)  # e-greedy action from current Q
+                demo_state, reward, demo_done, truncated, info = env.step(demo_action)
+    plt.close()
+    env.close()
     return Q, reward_per_episode
 
 
@@ -61,7 +69,7 @@ def test_agent(Q, episodes=1):
     for episode in range(episodes):
         state, info = env.reset()
         done = False
-        print(f"\nEpisode {episode+1}:")
+        print(f"\nFinal test {episode+1}:")
 
         while not done:
             action = np.argmax(Q[state])  # Always take the best action
@@ -70,8 +78,8 @@ def test_agent(Q, episodes=1):
             # Render the current frame
             frame = env.render()
             plt.imshow(frame)
-            plt.title(f"Episode {episode+1}")
-            plt.show(block=False)  # Show image without blocking execution
+            plt.title(f"Final test {episode+1}")
+            plt.show()  # Show image without blocking execution
             plt.pause(1.0)  # Pause for half a second to observe
 
             if done:
@@ -88,24 +96,21 @@ def test_agent(Q, episodes=1):
 def main():
     env = gym.make("FrozenLake-v1", is_slippery = False, render_mode="rgb_array") # is_slippery = False means the environment is deterministic
     num_episodes = 5_000
-    epsilon = 1.0
+    epsilon = 0.9
     epsilon_min = 0.01
     epsilon_decay = 0.999
     alpha = 0.1
-    gamma = 0.90
-    lambda_ = 0.0
-    Q, rewards_per_episode = sarsa_lambda(env, num_episodes, epsilon, epsilon_min, epsilon_decay, alpha, gamma, lambda_)
+    gamma = 0.99
+    Q, rewards_per_episode = Q_learn(env, num_episodes, epsilon, epsilon_min, epsilon_decay, alpha, gamma)
     env.close()
-    test_agent(Q)
-
-    # JUST FOR VISUALS
+    # test_agent(Q)
     
     # Plot the learning progress
     _, ax = plt.subplots(figsize=(10, 5))
     ax.plot(np.convolve(rewards_per_episode, np.ones(100)/100, mode='valid'))  # Smooth trend
     ax.set_xlabel("Episode")
     ax.set_ylabel("Average Reward (100-episode window)")
-    ax.set_title("SARSA Learning Progress")
+    ax.set_title("Q Learning Progress")
     plt.show()
 
     policy = np.argmax(Q, axis=1)
@@ -147,9 +152,7 @@ def main():
     plt.title("Learned Policy")
     plt.show()
 
-
-
+    input()
 if __name__ == "__main__":
     main()
-
 
